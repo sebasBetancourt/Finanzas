@@ -1,0 +1,53 @@
+# API + Postgres. Desde esta carpeta:
+#   docker compose up --build -d
+#
+# Frontend (otra terminal):
+#   cd ../frontend && pnpm install && pnpm dev
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-finanzas}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-finanzas_secret}
+      POSTGRES_DB: ${DB_NAME:-finanzas_db}
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./docs/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - api-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-finanzas} -d ${DB_NAME:-finanzas_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: always
+    environment:
+      PORT: 3001
+      HOST: "0.0.0.0"
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_finanzas_cambiar}
+      PG_USER: ${DB_USER:-finanzas}
+      PG_PASSWORD: ${DB_PASSWORD:-finanzas_secret}
+      PG_DATABASE: ${DB_NAME:-finanzas_db}
+      PG_PORT: 5432
+      PG_HOST: db
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - api-net
+
+volumes:
+  db_data:
+
+networks:
+  api-net:
