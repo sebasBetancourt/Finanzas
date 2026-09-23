@@ -5,6 +5,7 @@ export interface Usuario {
   apellido?: string | null;
   moneda: string;
   timezone: string;
+  rol?: 'admin' | 'usuario';
   estado: string;
   creado_en?: Date;
 }

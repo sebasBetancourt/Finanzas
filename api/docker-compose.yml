@@ -27,6 +27,7 @@ services:
 
   api:
     build: .
+    container_name: financeApi
     restart: always
     environment:
       PORT: 3001

@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
   apellido         VARCHAR(100),
   moneda           VARCHAR(3) NOT NULL DEFAULT 'COP',
   timezone         VARCHAR(64) NOT NULL DEFAULT 'America/Bogota',
+  rol              VARCHAR(30) NOT NULL DEFAULT 'usuario'
+                   CHECK (rol IN ('admin', 'usuario')),
   estado           VARCHAR(20) NOT NULL DEFAULT 'activo',
   creado_en        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   actualizado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -163,6 +165,35 @@ CREATE INDEX IF NOT EXISTS idx_tareas_usuario_fecha ON tareas(id_usuario, fecha_
 CREATE INDEX IF NOT EXISTS idx_movimientos_usuario_fecha ON movimientos(id_usuario, fecha);
 CREATE INDEX IF NOT EXISTS idx_movimientos_categoria ON movimientos(id_categoria);
 CREATE INDEX IF NOT EXISTS idx_ahorros_usuario ON metas_ahorro(id_usuario);
+
+-- Ítems financieros unificados (tablero Kanban)
+CREATE TABLE IF NOT EXISTS items_financieros (
+  id_item          SERIAL PRIMARY KEY,
+  id_usuario       INTEGER NOT NULL REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+  titulo           VARCHAR(200) NOT NULL,
+  tipo             VARCHAR(30) NOT NULL
+                   CHECK (tipo IN ('ingreso', 'gasto', 'deuda', 'inversion', 'ahorro')),
+  monto_total      NUMERIC(14, 2) NOT NULL CHECK (monto_total >= 0),
+  monto_pagado     NUMERIC(14, 2) NOT NULL DEFAULT 0 CHECK (monto_pagado >= 0),
+  estado           VARCHAR(30) NOT NULL DEFAULT 'pendiente'
+                   CHECK (estado IN ('pendiente', 'programado', 'en_proceso', 'ahorro', 'completado', 'cancelado')),
+  fecha            DATE,
+  notas            TEXT,
+  id_item_padre    INTEGER REFERENCES items_financieros(id_item) ON DELETE SET NULL,
+  cuota_mensual    NUMERIC(14, 2),
+  n_cuotas         INTEGER,
+  cuotas_pagadas   INTEGER DEFAULT 0,
+  dia_cobro        INTEGER DEFAULT 1,
+  cuota_inicial    NUMERIC(14, 2) DEFAULT 0,
+  creado_en        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_items_usuario ON items_financieros(id_usuario);
+CREATE INDEX IF NOT EXISTS idx_items_usuario_estado ON items_financieros(id_usuario, estado);
+CREATE INDEX IF NOT EXISTS idx_items_usuario_tipo ON items_financieros(id_usuario, tipo);
+CREATE INDEX IF NOT EXISTS idx_items_usuario_fecha ON items_financieros(id_usuario, fecha);
+CREATE INDEX IF NOT EXISTS idx_items_padre ON items_financieros(id_item_padre);
 
 -- INSERT idempotente: globales usan slug+tipo con id_usuario NULL
 CREATE UNIQUE INDEX IF NOT EXISTS uq_categorias_globales

@@ -17,7 +17,9 @@ import { ahorrosRoutes } from './routes/ahorros.routes';
 import { categoriasRoutes } from './routes/categorias.routes';
 import { movimientosRoutes } from './routes/movimientos.routes';
 import { kpisRoutes } from './routes/kpis.routes';
+import { itemsRoutes } from './routes/items.routes';
 import { errorHandler } from './libs/errorHandler';
+import { runStartupMigrations } from './libs/startupMigrations';
 
 const server = fastify({ logger: true });
 
@@ -86,9 +88,12 @@ server.register(ahorrosRoutes, { prefix: '/ahorros' });
 server.register(categoriasRoutes, { prefix: '/categorias' });
 server.register(movimientosRoutes, { prefix: '/movimientos' });
 server.register(kpisRoutes, { prefix: '/kpis' });
+server.register(itemsRoutes, { prefix: '/items' });
 
 const start = async () => {
   try {
+    await runStartupMigrations();
+
     const port = Number(process.env.PORT) || 3001;
     const host = process.env.HOST || '0.0.0.0';
     await server.listen({ port, host });

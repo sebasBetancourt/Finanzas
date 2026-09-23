@@ -2,7 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import LoginPage from "@/pages/LoginPage";
-import DashboardPage from "@/pages/DashboardPage";
+import DashboardPage from "@/pages/TableroPage";
 import SuenosPage from "@/pages/SuenosPage";
 import MetasPage from "@/pages/MetasPage";
 import CalendarioPage from "@/pages/CalendarioPage";

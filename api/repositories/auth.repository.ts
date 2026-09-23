@@ -5,7 +5,7 @@ export class AuthRepository {
   async findByEmail(email: string): Promise<{ data: (Usuario & { password_hash: string }) | null; error: any }> {
     try {
       const { rows } = await pool.query(
-        `SELECT id_usuario, email, password_hash, nombre, apellido, moneda, timezone, estado, creado_en
+        `SELECT id_usuario, email, password_hash, nombre, apellido, moneda, timezone, rol, estado, creado_en
          FROM usuarios WHERE email = $1 LIMIT 1`,
         [email.toLowerCase()]
       );
@@ -18,7 +18,7 @@ export class AuthRepository {
   async findById(id: number): Promise<{ data: Usuario | null; error: any }> {
     try {
       const { rows } = await pool.query(
-        `SELECT id_usuario, email, nombre, apellido, moneda, timezone, estado, creado_en
+        `SELECT id_usuario, email, nombre, apellido, moneda, timezone, rol, estado, creado_en
          FROM usuarios WHERE id_usuario = $1 LIMIT 1`,
         [id]
       );

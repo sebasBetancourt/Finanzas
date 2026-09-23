@@ -14,7 +14,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { href: "/dashboard", label: "Tablero", icon: LayoutDashboard, end: true },
   { href: "/dashboard/suenos", label: "Sueños", icon: Sparkles },
   { href: "/dashboard/metas", label: "Metas", icon: Target },
   { href: "/dashboard/calendario", label: "Calendario", icon: CalendarDays },
