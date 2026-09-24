@@ -1,0 +1,18 @@
+# Deploy gratis en Render: New → Blueprint → este repo (carpeta api)
+services:
+  - type: web
+    name: finanzas-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: HOST
+        value: "0.0.0.0"
+      - key: FRONTEND_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false

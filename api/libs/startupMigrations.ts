@@ -14,6 +14,8 @@ export async function runStartupMigrations(): Promise<void> {
   console.log('[MIGRATIONS] Running startup migrations...');
 
   try {
+    await ensureUsuariosTable();
+
     await pool.query(`
       ALTER TABLE usuarios
         ADD COLUMN IF NOT EXISTS rol VARCHAR(30) NOT NULL DEFAULT 'usuario'
@@ -42,6 +44,24 @@ export async function runStartupMigrations(): Promise<void> {
     console.error('[MIGRATIONS] Failed:', error);
     throw error;
   }
+}
+
+async function ensureUsuariosTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id_usuario       SERIAL PRIMARY KEY,
+      email            VARCHAR(255) NOT NULL UNIQUE,
+      password_hash    VARCHAR(255) NOT NULL,
+      nombre           VARCHAR(100) NOT NULL,
+      apellido         VARCHAR(100),
+      moneda           VARCHAR(3) NOT NULL DEFAULT 'COP',
+      timezone         VARCHAR(64) NOT NULL DEFAULT 'America/Bogota',
+      rol              VARCHAR(30) NOT NULL DEFAULT 'usuario',
+      estado           VARCHAR(20) NOT NULL DEFAULT 'activo',
+      creado_en        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      actualizado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 }
 
 async function ensureItemsFinancierosTable(): Promise<void> {

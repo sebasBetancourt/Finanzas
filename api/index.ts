@@ -25,12 +25,13 @@ const server = fastify({ logger: true });
 
 const envSchema = {
   type: 'object',
-  required: ['JWT_SECRET', 'HOST', 'PORT'],
+  required: ['JWT_SECRET'],
   properties: {
     JWT_SECRET: { type: 'string' },
-    HOST: { type: 'string' },
-    PORT: { type: 'string' },
+    HOST: { type: 'string', default: '0.0.0.0' },
+    PORT: { type: 'string', default: '3001' },
     FRONTEND_URL: { type: 'string' },
+    DATABASE_URL: { type: 'string' },
   },
 };
 
