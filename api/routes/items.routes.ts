@@ -11,6 +11,9 @@ export async function itemsRoutes(server: FastifyInstance, _opts: FastifyPluginO
   server.put('/presupuesto', itemsController.setPresupuesto);
   server.post('/copiar-mes', itemsController.copiarMes);
   server.post('/deuda-plan', itemsController.createDeudaPlan);
+  server.get('/metas-mes', itemsController.listMetasMes);
+  server.post('/metas-mes', itemsController.createMetaMes);
+  server.delete('/metas-mes/:id', itemsController.removeMetaMes);
   server.get('/:id', itemsController.get);
   server.post('/', itemsController.create);
   server.put('/:id', itemsController.update);

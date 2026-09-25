@@ -89,3 +89,14 @@ export const CopiarMesSchema = z.object({
   desde: z.string().regex(/^\d{4}-\d{2}$/),
   hacia: z.string().regex(/^\d{4}-\d{2}$/),
 });
+
+export const MetaMesTipoEnum = z.enum(['ingreso', 'ahorro', 'pagar_deuda', 'pagar_cuota']);
+
+export const CreateMetaMesSchema = z.object({
+  anio: z.number().int().min(2000).max(2100),
+  mes: z.number().int().min(1).max(12),
+  tipo: MetaMesTipoEnum,
+  titulo: z.string().min(1).max(200),
+  monto_objetivo: z.number().min(0),
+  id_item: z.number().int().positive().optional().nullable(),
+});

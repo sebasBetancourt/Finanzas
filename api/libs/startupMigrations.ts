@@ -38,6 +38,7 @@ export async function runStartupMigrations(): Promise<void> {
     await ensureItemsFinancierosTable();
     await ensureDebtPlanColumns();
     await ensurePresupuestosMesTable();
+    await ensureMetasMesTable();
 
     console.log('[MIGRATIONS] Startup migrations completed (sin tocar datos del tablero)');
   } catch (error) {
@@ -147,6 +148,28 @@ async function ensurePresupuestosMesTable(): Promise<void> {
     )
   `);
   console.log('[MIGRATIONS] presupuestos_mes table ensured');
+}
+
+async function ensureMetasMesTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS metas_mes (
+      id_meta_mes      SERIAL PRIMARY KEY,
+      id_usuario       INTEGER NOT NULL REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+      anio             INTEGER NOT NULL,
+      mes              INTEGER NOT NULL CHECK (mes BETWEEN 1 AND 12),
+      tipo             VARCHAR(30) NOT NULL
+                       CHECK (tipo IN ('ingreso', 'ahorro', 'pagar_deuda', 'pagar_cuota')),
+      titulo           VARCHAR(200) NOT NULL,
+      monto_objetivo   NUMERIC(14, 2) NOT NULL CHECK (monto_objetivo >= 0),
+      id_item          INTEGER REFERENCES items_financieros(id_item) ON DELETE SET NULL,
+      creado_en        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      actualizado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_metas_mes_usuario_mes ON metas_mes(id_usuario, anio, mes)`
+  );
+  console.log('[MIGRATIONS] metas_mes table ensured');
 }
 
 /** Solo crea el admin si no existe. No pisa password ni datos si ya está. */

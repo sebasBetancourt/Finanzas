@@ -9,6 +9,7 @@ import {
   GetItemsQuerySchema,
   PresupuestoMesSchema,
   CopiarMesSchema,
+  CreateMetaMesSchema,
 } from '../schemas/item.schema';
 import { itemService } from '../services/items/itemService';
 
@@ -157,5 +158,39 @@ export const itemsController = {
     );
     if (error) return reply.status(error.status).send(errorResponse({ message: error.message, code: error.status, error: error.details }));
     return reply.status(201).send(successResponse(data, 201));
+  },
+
+  listMetasMes: async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!req.userContext?.id) return unauth(reply);
+    const q = req.query as { anio?: string; mes?: string };
+    const anio = Number(q.anio);
+    const mes = Number(q.mes);
+    if (!anio || !mes || mes < 1 || mes > 12) {
+      return reply.status(400).send(errorResponse({ message: 'anio y mes requeridos', code: 400 }));
+    }
+    const { data, error } = await itemService.listMetasMes(req.userContext.id, anio, mes);
+    if (error) return reply.status(error.status).send(errorResponse({ message: error.message, code: error.status, error: error.details }));
+    return reply.send(successResponse(data));
+  },
+
+  createMetaMes: async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!req.userContext?.id) return unauth(reply);
+    const parsed = CreateMetaMesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send(errorResponse({ message: 'Datos inválidos', code: 400, error: parsed.error.errors }));
+    }
+    const { data, error } = await itemService.createMetaMes(req.userContext.id, parsed.data);
+    if (error) return reply.status(error.status).send(errorResponse({ message: error.message, code: error.status, error: error.details }));
+    return reply.status(201).send(successResponse(data, 201));
+  },
+
+  removeMetaMes: async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!req.userContext?.id) return unauth(reply);
+    const { data, error } = await itemService.removeMetaMes(
+      req.userContext.id,
+      Number((req.params as any).id)
+    );
+    if (error) return reply.status(error.status).send(errorResponse({ message: error.message, code: error.status, error: error.details }));
+    return reply.send(successResponse(data));
   },
 };

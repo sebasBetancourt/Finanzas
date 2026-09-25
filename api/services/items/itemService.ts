@@ -1,5 +1,6 @@
 import { ItemRepository } from '../../repositories/item.repository';
 import { PresupuestoRepository } from '../../repositories/presupuesto.repository';
+import { MetaMesRepository, type MetaMesTipo } from '../../repositories/metaMes.repository';
 import {
   CreateItemData,
   CreateDeudaPlanData,
@@ -8,6 +9,7 @@ import {
 
 const repo = new ItemRepository();
 const presupuestoRepo = new PresupuestoRepository();
+const metaMesRepo = new MetaMesRepository();
 
 function fechaCobroMes(dia: number, ref = new Date()): string {
   const y = ref.getFullYear();
@@ -424,6 +426,104 @@ export class ItemServiceClass {
     const prev = new Date(Number(mesKey.slice(0, 4)), Number(mesKey.slice(5, 7)) - 2, 1);
     const desde = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
     await repo.copiarMes(userId, desde, mesKey);
+  }
+
+  async listMetasMes(userId: number, anio: number, mes: number) {
+    const { data: metas, error } = await metaMesRepo.list(userId, anio, mes);
+    if (error) {
+      return { data: null, error: { status: 500, message: 'Error al listar metas del mes', details: error } };
+    }
+
+    const mesKey = `${anio}-${String(mes).padStart(2, '0')}`;
+    const { data: items } = await repo.listBoard(userId, { mes: mesKey });
+    const list = items || [];
+    const { data: presupuesto } = await presupuestoRepo.get(userId, anio, mes);
+
+    const ingresoItems = list
+      .filter((i) => i.tipo === 'ingreso')
+      .reduce((s, i) => s + Number(i.monto_total), 0);
+    const ingresoPresupuesto = Number(presupuesto?.ingreso_total || 0);
+    const ingresoMes = Math.max(ingresoItems, ingresoPresupuesto);
+
+    const ahorroMes = list
+      .filter((i) => i.tipo === 'ahorro')
+      .reduce((s, i) => s + Number(i.monto_pagado || i.monto_total || 0), 0);
+
+    const withAvance = (metas || []).map((m) => {
+      let avance = 0;
+      const objetivo = Number(m.monto_objetivo) || 0;
+      if (m.tipo === 'ingreso') {
+        avance = ingresoMes;
+      } else if (m.tipo === 'ahorro') {
+        if (m.id_item) {
+          const linked = list.find((i) => i.id_item === m.id_item);
+          avance = linked ? Number(linked.monto_pagado || 0) : 0;
+        } else {
+          avance = ahorroMes;
+        }
+      } else if (m.tipo === 'pagar_deuda' || m.tipo === 'pagar_cuota') {
+        if (m.id_item) {
+          const linked = list.find((i) => i.id_item === Number(m.id_item));
+          if (linked && linked.estado === 'completado') {
+            avance = Number(linked.monto_total) || objetivo;
+          }
+        }
+      }
+      const pct = objetivo > 0 ? Math.min(100, Math.round((avance / objetivo) * 1000) / 10) : 0;
+      return { ...m, avance, progreso_pct: pct };
+    });
+
+    return { data: withAvance, error: null };
+  }
+
+  async createMetaMes(
+    userId: number,
+    input: {
+      anio: number;
+      mes: number;
+      tipo: MetaMesTipo;
+      titulo: string;
+      monto_objetivo: number;
+      id_item?: number | null;
+    }
+  ) {
+    if (
+      (input.tipo === 'pagar_deuda' || input.tipo === 'pagar_cuota') &&
+      !input.id_item
+    ) {
+      return {
+        data: null,
+        error: {
+          status: 400,
+          message: 'Debes vincular una deuda o cuota para esta meta',
+          details: null,
+        },
+      };
+    }
+    if (input.id_item) {
+      const item = await repo.getById(input.id_item, userId);
+      if (!item.data) {
+        return { data: null, error: { status: 404, message: 'Ítem vinculado no encontrado', details: null } };
+      }
+    }
+    const { data, error } = await metaMesRepo.create(userId, input);
+    if (error) {
+      return { data: null, error: { status: 500, message: 'Error al crear meta del mes', details: error } };
+    }
+    const listed = await this.listMetasMes(userId, input.anio, input.mes);
+    const created = listed.data?.find((m) => m.id_meta_mes === data?.id_meta_mes) || data;
+    return { data: created, error: null };
+  }
+
+  async removeMetaMes(userId: number, id: number) {
+    const { data, error } = await metaMesRepo.remove(userId, id);
+    if (error) {
+      return { data: null, error: { status: 500, message: 'Error al eliminar meta', details: error } };
+    }
+    if (!data) {
+      return { data: null, error: { status: 404, message: 'Meta no encontrada', details: null } };
+    }
+    return { data: true, error: null };
   }
 }
 

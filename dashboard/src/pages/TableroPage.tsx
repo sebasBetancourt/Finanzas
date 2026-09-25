@@ -15,21 +15,12 @@ import type { ItemFinanciero, ItemsResumen, ItemEstado } from "@/interfaces/item
 import { ESTADOS, TIPOS } from "@/interfaces/item";
 import { ItemCard } from "@/components/tablero/ItemCard";
 import { ItemModal, type ItemFormValues } from "@/components/tablero/ItemModal";
+import { FinanceCalendar } from "@/components/tablero/FinanceCalendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney, cn } from "@/lib/utils";
 import { toast } from "sonner";
-import {
-  format,
-  startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
-  isSameDay,
-  isSameMonth,
-  addMonths,
-  subMonths,
-  parseISO,
-} from "date-fns";
+import { format, startOfMonth, addMonths, subMonths, isSameMonth } from "date-fns";
 import { es } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Copy, Plus, Search } from "lucide-react";
 
@@ -64,12 +55,11 @@ export default function TableroPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [modalDefaults, setModalDefaults] = useState<Partial<ItemFormValues>>({});
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
-  const [calMonth, setCalMonth] = useState(now);
-  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [editIngreso, setEditIngreso] = useState("");
   const [colQuery, setColQuery] = useState<Partial<Record<ItemEstado, string>>>({});
   const [colHits, setColHits] = useState<Partial<Record<ItemEstado, ItemFinanciero[]>>>({});
   const [colSearching, setColSearching] = useState<Partial<Record<ItemEstado, boolean>>>({});
+  const [calendarRefresh, setCalendarRefresh] = useState(0);
 
   const mesKey = format(boardMonth, "yyyy-MM");
   const anio = boardMonth.getFullYear();
@@ -223,6 +213,7 @@ export default function TableroPage() {
       }
       toast.success("Ítem actualizado");
       await load();
+      setCalendarRefresh((n) => n + 1);
       return;
     }
     if (values.es_plan_deuda) {
@@ -250,6 +241,7 @@ export default function TableroPage() {
       toast.success("Ítem creado");
     }
     await load();
+    setCalendarRefresh((n) => n + 1);
   };
 
   const handleDelete = async (item: ItemFinanciero) => {
@@ -383,15 +375,6 @@ export default function TableroPage() {
     const y = now.getFullYear();
     return [y - 1, y, y + 1];
   }, [now]);
-
-  const days = useMemo(() => {
-    const start = startOfMonth(calMonth);
-    const end = endOfMonth(calMonth);
-    return eachDayOfInterval({ start, end });
-  }, [calMonth]);
-
-  const itemsForDay = (day: Date) =>
-    items.filter((i) => i.fecha && isSameDay(parseISO(String(i.fecha).slice(0, 10)), day));
 
   const cardProps = (item: ItemFinanciero, opts?: { draggable?: boolean }) => ({
     item,
@@ -567,6 +550,21 @@ export default function TableroPage() {
       )}
 
       <div className="min-h-0 flex-1 overflow-auto">
+        {vista === "calendario" && (
+          <FinanceCalendar
+            month={boardMonth}
+            onMonthChange={(m) => {
+              setVerTodos(false);
+              setBoardMonth(m);
+            }}
+            refreshKey={calendarRefresh}
+            onAddForDay={({ fecha, tipo, estado }) =>
+              openNuevo({ fecha, tipo, estado: (estado as ItemEstado) || "pendiente" })
+            }
+            onEditItem={(item) => openEdit(item)}
+          />
+        )}
+
         {vista === "tablero" && (
           <div className="flex h-full gap-3 overflow-x-auto pb-4">
             {ESTADOS.map((col) => (
@@ -628,86 +626,6 @@ export default function TableroPage() {
                 </button>
               </div>
             ))}
-          </div>
-        )}
-
-        {vista === "calendario" && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="rounded-lg border border-forest/15 p-1.5 hover:bg-white"
-                onClick={() => setCalMonth(subMonths(calMonth, 1))}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <h3 className="font-display text-lg capitalize text-forest">
-                {format(calMonth, "MMMM yyyy", { locale: es })}
-              </h3>
-              <button
-                type="button"
-                className="rounded-lg border border-forest/15 p-1.5 hover:bg-white"
-                onClick={() => setCalMonth(addMonths(calMonth, 1))}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-forest/40">
-              {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
-                <div key={d} className="py-1">{d}</div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {Array.from({ length: (days[0].getDay() + 6) % 7 }).map((_, i) => (
-                <div key={`pad-${i}`} />
-              ))}
-              {days.map((day) => {
-                const dayItems = itemsForDay(day);
-                const active = selectedDay && isSameDay(day, selectedDay);
-                return (
-                  <button
-                    key={day.toISOString()}
-                    type="button"
-                    onClick={() => setSelectedDay(day)}
-                    className={cn(
-                      "min-h-[4.5rem] rounded-lg border p-1.5 text-left transition",
-                      active ? "border-forest bg-forest/5" : "border-forest/10 bg-white/70 hover:border-forest/25",
-                      !isSameMonth(day, calMonth) && "opacity-40"
-                    )}
-                  >
-                    <span className="text-xs font-medium text-forest">{format(day, "d")}</span>
-                    <div className="mt-1 space-y-0.5">
-                      {dayItems.slice(0, 3).map((i) => (
-                        <div
-                          key={i.id_item}
-                          className="truncate rounded px-1 text-[9px] text-white"
-                          style={{ background: TIPOS.find((t) => t.id === i.tipo)?.color || "#0c4136" }}
-                        >
-                          {i.titulo}
-                        </div>
-                      ))}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            {selectedDay && (
-              <div className="rounded-xl border border-forest/10 bg-white/80 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h4 className="font-display text-forest">
-                    {format(selectedDay, "d MMMM yyyy", { locale: es })}
-                  </h4>
-                  <Button size="sm" onClick={() => openNuevo({ fecha: format(selectedDay, "yyyy-MM-dd") })}>
-                    <Plus className="h-3.5 w-3.5" /> Agregar
-                  </Button>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {itemsForDay(selectedDay).map((item) => (
-                    <ItemCard key={item.id_item} {...cardProps(item)} />
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 

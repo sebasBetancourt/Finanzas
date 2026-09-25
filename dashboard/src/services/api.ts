@@ -80,6 +80,39 @@ export const createDeudaPlan = (body: {
     body: JSON.stringify(body),
   });
 
+export type MetaMesTipo = "ingreso" | "ahorro" | "pagar_deuda" | "pagar_cuota";
+
+export interface MetaMes {
+  id_meta_mes: number;
+  anio: number;
+  mes: number;
+  tipo: MetaMesTipo;
+  titulo: string;
+  monto_objetivo: number;
+  id_item?: number | null;
+  avance?: number;
+  progreso_pct?: number;
+}
+
+export const listMetasMes = (anio: number, mes: number) =>
+  apiFetch(`/items/metas-mes?anio=${anio}&mes=${mes}`) as Promise<MetaMes[]>;
+
+export const createMetaMes = (body: {
+  anio: number;
+  mes: number;
+  tipo: MetaMesTipo;
+  titulo: string;
+  monto_objetivo: number;
+  id_item?: number | null;
+}) =>
+  apiFetch("/items/metas-mes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }) as Promise<MetaMes>;
+
+export const deleteMetaMes = (id: number) =>
+  apiFetch(`/items/metas-mes/${id}`, { method: "DELETE" });
+
 export const updateItem = (id: number, body: unknown) =>
   apiFetch(`/items/${id}`, { method: "PUT", body: JSON.stringify(body) }) as Promise<ItemFinanciero>;
 
