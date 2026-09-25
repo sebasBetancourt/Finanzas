@@ -31,7 +31,7 @@ import {
   parseISO,
 } from "date-fns";
 import { es } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Copy, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Plus, Search } from "lucide-react";
 
 type Vista = "tablero" | "calendario" | "categoria" | "deudas" | "ahorro";
 
@@ -67,6 +67,9 @@ export default function TableroPage() {
   const [calMonth, setCalMonth] = useState(now);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [editIngreso, setEditIngreso] = useState("");
+  const [colQuery, setColQuery] = useState<Partial<Record<ItemEstado, string>>>({});
+  const [colHits, setColHits] = useState<Partial<Record<ItemEstado, ItemFinanciero[]>>>({});
+  const [colSearching, setColSearching] = useState<Partial<Record<ItemEstado, boolean>>>({});
 
   const mesKey = format(boardMonth, "yyyy-MM");
   const anio = boardMonth.getFullYear();
@@ -96,6 +99,44 @@ export default function TableroPage() {
     setLoading(true);
     load();
   }, [load]);
+
+  useEffect(() => {
+    setColQuery({});
+    setColHits({});
+  }, [mesKey, verTodos]);
+
+  // Búsqueda por columna (backend): título, monto, vínculo
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    (Object.keys(colQuery) as ItemEstado[]).forEach((estado) => {
+      const q = (colQuery[estado] || "").trim();
+      if (!q) {
+        setColHits((prev) => {
+          if (!(estado in prev)) return prev;
+          const next = { ...prev };
+          delete next[estado];
+          return next;
+        });
+        return;
+      }
+      const t = setTimeout(async () => {
+        setColSearching((s) => ({ ...s, [estado]: true }));
+        try {
+          const params = verTodos
+            ? { todos: true as const, estado, q }
+            : { mes: mesKey, estado, q };
+          const list = await listItems(params);
+          setColHits((prev) => ({ ...prev, [estado]: list || [] }));
+        } catch (err: any) {
+          toast.error(err.message || "Error al buscar");
+        } finally {
+          setColSearching((s) => ({ ...s, [estado]: false }));
+        }
+      }, 280);
+      timers.push(t);
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [colQuery, mesKey, verTodos]);
 
   const deudasPadre = useMemo(
     () =>
@@ -548,12 +589,35 @@ export default function TableroPage() {
                 <div className="flex items-center gap-2 border-b border-forest/5 px-3 py-2.5">
                   <span className="h-2.5 w-2.5 rounded-full" style={{ background: col.color }} />
                   <span className="text-sm font-medium text-forest">{col.label}</span>
-                  <span className="ml-auto text-xs text-forest/40">{byEstado[col.id].length}</span>
+                  <span className="ml-auto text-xs text-forest/40">
+                    {(colHits[col.id] ?? byEstado[col.id]).length}
+                  </span>
+                </div>
+                <div className="border-b border-forest/5 px-2 py-1.5">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-forest/35" />
+                    <Input
+                      value={colQuery[col.id] || ""}
+                      onChange={(e) =>
+                        setColQuery((prev) => ({ ...prev, [col.id]: e.target.value }))
+                      }
+                      placeholder="Nombre, monto, vínculo…"
+                      className="h-8 border-forest/10 bg-white/80 pl-7 text-xs"
+                    />
+                  </div>
+                  {colSearching[col.id] && (
+                    <p className="mt-1 px-1 text-[10px] text-forest/40">Buscando…</p>
+                  )}
                 </div>
                 <div className="flex-1 space-y-2 overflow-y-auto p-2">
-                  {byEstado[col.id].map((item) => (
+                  {(colHits[col.id] ?? byEstado[col.id]).map((item) => (
                     <ItemCard key={item.id_item} {...cardProps(item, { draggable: true })} />
                   ))}
+                  {(colHits[col.id] ?? byEstado[col.id]).length === 0 && (
+                    <p className="px-1 py-4 text-center text-[11px] text-forest/35">
+                      {colQuery[col.id]?.trim() ? "Sin resultados" : "Vacío"}
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"

@@ -74,6 +74,8 @@ export const GetItemsQuerySchema = z.object({
     .union([z.literal('true'), z.literal('false'), z.boolean()])
     .optional()
     .transform((v) => v === true || v === 'true'),
+  /** Búsqueda inteligente: título, notas, vínculo (padre), monto */
+  q: z.string().max(120).optional(),
 });
 
 export const PresupuestoMesSchema = z.object({

@@ -61,22 +61,28 @@ export class ItemServiceClass {
       hasta?: string;
       mes?: string;
       todos?: boolean;
+      q?: string;
     }
   ) {
-    const ref = filters?.mes
-      ? new Date(Number(filters.mes.slice(0, 4)), Number(filters.mes.slice(5, 7)) - 1, 1)
-      : new Date();
-    await this.ensureCuotasDelMes(userId, ref);
+    const isSearch = Boolean(filters?.q && filters.q.trim());
 
-    // Al entrar a un mes, traer automáticamente gastos/inversiones recurrentes del mes anterior → Pendiente
-    if (filters?.mes) {
-      await this.ensureRecurrentesDelMes(userId, filters.mes);
+    // Búsquedas del tablero: no re-correr ensure (más rápido)
+    if (!isSearch) {
+      const ref = filters?.mes
+        ? new Date(Number(filters.mes.slice(0, 4)), Number(filters.mes.slice(5, 7)) - 1, 1)
+        : new Date();
+      await this.ensureCuotasDelMes(userId, ref);
+      if (filters?.mes) {
+        await this.ensureRecurrentesDelMes(userId, filters.mes);
+      }
     }
 
     if (filters?.mes || filters?.todos) {
       const { data, error } = await repo.listBoard(userId, {
         mes: filters.mes,
         todos: filters.todos,
+        estado: filters.estado,
+        q: filters.q,
       });
       if (error) return { data: null, error: { status: 500, message: 'Error al listar ítems', details: error } };
       return { data, error: null };

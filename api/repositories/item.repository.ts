@@ -26,10 +26,92 @@ function toDateOnly(v: unknown): string | null {
   return null;
 }
 
+/** Parseo de búsqueda: texto + monto (126.448 / 126448 / $100 mil). */
+function parseSearchQuery(raw?: string | null): {
+  text: string | null;
+  digits: string | null;
+  monto: number | null;
+} {
+  const text = (raw || '').trim();
+  if (!text) return { text: null, digits: null, monto: null };
+  const digits = text.replace(/[^\d]/g, '');
+  const compact = text.replace(/[\s$.]/g, '');
+  const looksMoney =
+    digits.length >= 2 &&
+    (/^\d[\d.,\s]*$/.test(text.trim()) ||
+      digits.length / Math.max(compact.length, 1) >= 0.6);
+  return {
+    text,
+    digits: looksMoney && digits ? digits : digits.length >= 4 ? digits : null,
+    monto: looksMoney && digits ? Number(digits) : null,
+  };
+}
+
+/** Condición SQL de búsqueda inteligente sobre i + p (padre). */
+function appendSearchSql(
+  cond: string[],
+  vals: any[],
+  qRaw?: string | null,
+  startIdx = 2
+): number {
+  const { text, digits, monto } = parseSearchQuery(qRaw);
+  if (!text) return startIdx;
+  let i = startIdx;
+  const parts: string[] = [];
+
+  vals.push(`%${text}%`);
+  const likeIdx = i++;
+  parts.push(`i.titulo ILIKE $${likeIdx}`);
+  parts.push(`COALESCE(i.notas, '') ILIKE $${likeIdx}`);
+  parts.push(`COALESCE(p.titulo, '') ILIKE $${likeIdx}`);
+  parts.push(`i.tipo::text ILIKE $${likeIdx}`);
+
+  // Título sin espacios/puntos (ej. "cuotaaddi" ≈ "Cuota Addi")
+  vals.push(`%${text.replace(/[\s._-]/g, '')}%`);
+  const compactIdx = i++;
+  parts.push(
+    `regexp_replace(lower(i.titulo), '[\\s._-]+', '', 'g') LIKE lower($${compactIdx})`
+  );
+  parts.push(
+    `regexp_replace(lower(COALESCE(p.titulo, '')), '[\\s._-]+', '', 'g') LIKE lower($${compactIdx})`
+  );
+
+  if (digits) {
+    vals.push(digits);
+    const digIdx = i++;
+    parts.push(
+      `regexp_replace(i.monto_total::text, '[^0-9]', '', 'g') LIKE '%' || $${digIdx} || '%'`
+    );
+    parts.push(
+      `regexp_replace(COALESCE(i.monto_pagado, 0)::text, '[^0-9]', '', 'g') LIKE '%' || $${digIdx} || '%'`
+    );
+    parts.push(
+      `regexp_replace(COALESCE(i.cuota_mensual, 0)::text, '[^0-9]', '', 'g') LIKE '%' || $${digIdx} || '%'`
+    );
+  }
+  if (monto != null && !Number.isNaN(monto)) {
+    vals.push(monto);
+    const mIdx = i++;
+    parts.push(`i.monto_total = $${mIdx}`);
+    parts.push(`COALESCE(i.monto_pagado, 0) = $${mIdx}`);
+    parts.push(`COALESCE(i.cuota_mensual, 0) = $${mIdx}`);
+    parts.push(`ABS(i.monto_total - $${mIdx}) < 1`);
+  }
+
+  cond.push(`(${parts.join(' OR ')})`);
+  return i;
+}
+
 export class ItemRepository {
   async list(
     id_usuario: number,
-    filters?: { tipo?: string; estado?: string; desde?: string; hasta?: string }
+    filters?: {
+      tipo?: string;
+      estado?: string;
+      desde?: string;
+      hasta?: string;
+      q?: string;
+    }
   ): Promise<{ data: ItemFinanciero[] | null; error: any }> {
     try {
       const cond = ['i.id_usuario = $1'];
@@ -51,6 +133,7 @@ export class ItemRepository {
         cond.push(`i.fecha <= $${i++}`);
         vals.push(filters.hasta);
       }
+      i = appendSearchSql(cond, vals, filters?.q, i);
       const { rows } = await pool.query(
         `SELECT i.*, p.titulo AS padre_titulo
          FROM items_financieros i
@@ -71,35 +154,44 @@ export class ItemRepository {
    */
   async listBoard(
     id_usuario: number,
-    opts?: { mes?: string; todos?: boolean }
+    opts?: { mes?: string; todos?: boolean; estado?: string; q?: string }
   ): Promise<{ data: ItemFinanciero[] | null; error: any }> {
     try {
       if (opts?.todos || !opts?.mes) {
-        return this.list(id_usuario);
+        return this.list(id_usuario, { estado: opts?.estado, q: opts?.q });
       }
       const [y, m] = opts.mes.split('-').map(Number);
-      const { rows } = await pool.query(
-        `SELECT i.*, p.titulo AS padre_titulo
-         FROM items_financieros i
-         LEFT JOIN items_financieros p ON p.id_item = i.id_item_padre
-         WHERE i.id_usuario = $1
-           AND (
-             -- Deudas totales (padres) siempre
+      const cond = [
+        'i.id_usuario = $1',
+        `(
              (i.tipo = 'deuda' AND i.id_item_padre IS NULL AND i.estado NOT IN ('cancelado'))
              OR
-             -- Resto filtrado por mes
              (
                i.fecha IS NOT NULL
                AND EXTRACT(YEAR FROM i.fecha) = $2
                AND EXTRACT(MONTH FROM i.fecha) = $3
                AND NOT (i.tipo = 'deuda' AND i.id_item_padre IS NULL)
              )
-           )
+           )`,
+      ];
+      const vals: any[] = [id_usuario, y, m];
+      let i = 4;
+      if (opts?.estado) {
+        cond.push(`i.estado = $${i++}`);
+        vals.push(opts.estado);
+      }
+      i = appendSearchSql(cond, vals, opts?.q, i);
+
+      const { rows } = await pool.query(
+        `SELECT i.*, p.titulo AS padre_titulo
+         FROM items_financieros i
+         LEFT JOIN items_financieros p ON p.id_item = i.id_item_padre
+         WHERE ${cond.join(' AND ')}
          ORDER BY
            CASE WHEN i.tipo = 'deuda' AND i.id_item_padre IS NULL THEN 0 ELSE 1 END,
            i.fecha NULLS LAST,
            i.creado_en DESC`,
-        [id_usuario, y, m]
+        vals
       );
       return { data: rows, error: null };
     } catch (error) {

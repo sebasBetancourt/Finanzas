@@ -12,6 +12,7 @@ export const listItems = (params?: {
   hasta?: string;
   mes?: string;
   todos?: boolean;
+  q?: string;
 }) => {
   const q = new URLSearchParams();
   if (params?.tipo) q.set("tipo", params.tipo);
@@ -20,6 +21,7 @@ export const listItems = (params?: {
   if (params?.hasta) q.set("hasta", params.hasta);
   if (params?.mes) q.set("mes", params.mes);
   if (params?.todos) q.set("todos", "true");
+  if (params?.q?.trim()) q.set("q", params.q.trim());
   const qs = q.toString();
   return apiFetch(`/items${qs ? `?${qs}` : ""}`) as Promise<ItemFinanciero[]>;
 };
